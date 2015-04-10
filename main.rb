@@ -1,19 +1,7 @@
-# #new_game
-# user enters username
-
-# bet
-# user_name has $500
-# user enters amount to bet
-
-# game
-
-# game_over
-# You've amassed a final amount of $1000
-# Now that you've honed your blackjack skills, there's nothing left to do except go to Vegas. 
-
-
 require 'rubygems'
 require 'sinatra'
+BLACKJACK = 21
+DEALER_HIT_MIN = 17
 
 set :sessions, true
 
@@ -29,7 +17,7 @@ helpers do
     end
 
     cards.each do |card|
-      if card[0] == 'A' && total > 21
+      if card[0] == 'A' && total > BLACKJACK
         total -= 10
       end
     end
@@ -106,13 +94,13 @@ get '/game' do
   session[:deck] = values.product(suits).shuffle!
   session[:players_cards] = []
   session[:dealers_cards] = []
-  session[:players_cards] << session[:deck].pop
-  session[:dealers_cards] << session[:deck].pop
-  session[:players_cards] << session[:deck].pop
-  session[:dealers_cards] << session[:deck].pop
+  2.times do
+    session[:players_cards] << session[:deck].pop
+    session[:dealers_cards] << session[:deck].pop
+  end
   session[:turn] = "Player"
   player_total = calculate_total(session[:players_cards])
-  if player_total == 21 && session[:players_cards].count == 2
+  if player_total == BLACKJACK && session[:players_cards].count == 2
     redirect '/game/player/blackjack'
   end
   erb :game
@@ -121,9 +109,9 @@ end
 post '/game/player/hit' do
   session[:players_cards] << session[:deck].pop
   player_total = calculate_total(session[:players_cards])
-  if player_total > 21
+  if player_total > BLACKJACK
     loser("Sorry, it looks like #{session[:player_name]} busted at #{calculate_total(session[:players_cards])}.")
-  elsif player_total == 21
+  elsif player_total == BLACKJACK
     session[:turn] = "dealer"
     redirect '/game/dealer'
   end
@@ -141,11 +129,11 @@ get '/game/dealer' do
   
   dealer_total = calculate_total(session[:dealers_cards])
 
-  if dealer_total == 21 && session[:dealers_cards].count == 2
+  if dealer_total == BLACKJACK && session[:dealers_cards].count == 2
     loser("Dealer has Blackjack.")
-  elsif dealer_total < 17
+  elsif dealer_total < DEALER_HIT_MIN
     @show_dealer_hit_button = true
-  elsif dealer_total > 21
+  elsif dealer_total > BLACKJACK
     winner("Dealer busted at #{calculate_total(session[:dealers_cards])}.")
   else
     redirect '/game/compare'
@@ -174,7 +162,7 @@ end
 
 get '/game/player/blackjack' do
   session[:turn] = "dealer"
-  if calculate_total(session[:dealers_cards]) == 21 && session[:dealers_cards].count == 2
+  if calculate_total(session[:dealers_cards]) == BLACKJACK && session[:dealers_cards].count == 2
     tie("#{session[:player_name]} has Blackjack but the dealer also has Blackjack!")
   else
     winner("#{session[:player_name]} has Blackjack!")
