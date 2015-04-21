@@ -2,8 +2,11 @@ require 'rubygems'
 require 'sinatra'
 BLACKJACK = 21
 DEALER_HIT_MIN = 17
+INITIAL_STACK_AMOUNT = 500
 
-set :sessions, true
+use Rack::Session::Cookie, :key => 'rack.session',
+                           :path => '/',
+                           :secret => 'your_secret' 
 
 helpers do
   def calculate_total(cards)
@@ -47,19 +50,21 @@ helpers do
   def winner(msg)
     @show_hit_or_stay_buttons = false
     @play_again = true
-    @success = "#{msg} #{session[:player_name]} wins!"
+    session[:player_stack] = session[:player_stack] + session[:bet_amount]
+    @winner = "#{msg} #{session[:player_name]} wins! #{session[:player_name]} now has $#{session[:player_stack]}."
   end
 
   def loser(msg)
     @show_hit_or_stay_buttons = false
     @play_again = true
-    @error = "#{msg} #{session[:player_name]} loses..."
+    session[:player_stack] = session[:player_stack] - session[:bet_amount]
+    @loser = "#{msg} #{session[:player_name]} loses...#{session[:player_name]} now has $#{session[:player_stack]}."
   end
 
   def tie(msg)
     @show_hit_or_stay_buttons = false
     @play_again = true
-    @success = "#{msg} It's a tie!"
+    @winner = "#{msg} It's a tie!"
   end
 end
 
@@ -76,6 +81,7 @@ get '/' do
 end
 
 get '/set_name' do
+  session[:player_stack] = INITIAL_STACK_AMOUNT
   erb :set_name
 end
 
@@ -85,8 +91,25 @@ post '/set_name' do
     halt erb :set_name
   end
   session[:player_name] = params[:player_name]
+  redirect '/bet'
+end
+
+get '/bet' do
+  erb :bet
+end
+
+post '/bet' do
+  if params[:bet_amount].nil? || params[:bet_amount].to_i == 0
+    @error = "Must make a bet."
+    halt erb :bet
+  elsif params[:bet_amount].to_i > session[:player_stack]
+    @error = "Maximum bet is #{session[:player_stack]}"
+    halt erb :bet
+  end
+  session[:bet_amount] = params[:bet_amount].to_i
   redirect '/game'
 end
+
 
 get '/game' do
   values = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"]
@@ -101,7 +124,12 @@ get '/game' do
   session[:turn] = "Player"
   player_total = calculate_total(session[:players_cards])
   if player_total == BLACKJACK && session[:players_cards].count == 2
-    redirect '/game/player/blackjack'
+    session[:turn] = "dealer"
+    if calculate_total(session[:dealers_cards]) == BLACKJACK && session[:dealers_cards].count == 2
+      tie("#{session[:player_name]} has Blackjack but the dealer also has Blackjack!")
+    else
+      winner("#{session[:player_name]} has Blackjack!")
+    end
   end
   erb :game
 end
@@ -115,7 +143,7 @@ post '/game/player/hit' do
     session[:turn] = "dealer"
     redirect '/game/dealer'
   end
-  erb :game
+  erb :game, layout: false
 end
 
 post '/game/player/stay' do
@@ -138,7 +166,7 @@ get '/game/dealer' do
   else
     redirect '/game/compare'
   end
-  erb :game
+  erb :game, layout: false
 end
 
 post '/game/dealer/hit' do
@@ -157,21 +185,5 @@ get '/game/compare' do
   else
     loser("#{session[:player_name]} has #{player_total} and the dealer has #{dealer_total}.")
   end
-  erb :game
+  erb :game, layout: false
 end
-
-get '/game/player/blackjack' do
-  session[:turn] = "dealer"
-  if calculate_total(session[:dealers_cards]) == BLACKJACK && session[:dealers_cards].count == 2
-    tie("#{session[:player_name]} has Blackjack but the dealer also has Blackjack!")
-  else
-    winner("#{session[:player_name]} has Blackjack!")
-  end
-  erb :game
-end
-
-
-
-
-
-
